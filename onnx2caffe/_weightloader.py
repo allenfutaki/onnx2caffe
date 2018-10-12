@@ -35,6 +35,11 @@ def _convert_relu(net, node, graph, err):
 def _convert_sigmoid(net, node, graph, err):
     pass
 
+def _convert_Prelu(net, node, graph, err):
+    scale = node.input_tensors[node.inputs[1]]
+    node_name = node.name
+    np.copyto(net.params[node_name + '_prelu'][0].data, scale, casting='same_kind')
+
 def _convert_BatchNorm(net, node, graph, err):
     scale = node.input_tensors[node.inputs[1]]
     bias = node.input_tensors[node.inputs[2]]
@@ -140,6 +145,7 @@ _ONNX_NODE_REGISTRY = {
     "ConvTranspose": _convert_conv_transpose,
     "Sigmoid": _convert_sigmoid,
     "Flatten": _convert_Flatten,
+    "PRelu": _convert_Prelu,
 }
 
 

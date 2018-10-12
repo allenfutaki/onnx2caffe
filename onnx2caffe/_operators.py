@@ -24,6 +24,24 @@ def make_input(input):
     input_layer = myf("Input", name, [], output, input_param=dict(shape=dict(dim=shape)))
     return input_layer
 
+def _convert_Prelu(node, graph, err):
+    scale = node.input_tensors[node.inputs[1]]
+    node_name = node.name
+
+    input_name = str(node.inputs[0])
+    output_name = str(node.outputs[0])
+
+    if input_name==output_name:
+        inplace = True
+    else:
+        inplace = False
+
+    prelu_layer = myf("PReLU", node_name+"_prelu",[input_name],[output_name], in_place=inplace)
+
+    graph.channel_dims[output_name] = graph.channel_dims[input_name]
+
+    return prelu_layer
+
 def _convert_conv(node, graph, err):
     weight_name = node.inputs[1]
     input_name = str(node.inputs[0])
@@ -397,4 +415,5 @@ _ONNX_NODE_REGISTRY = {
     "ConvTranspose": _convert_conv_transpose,
     "Sigmoid": _convert_sigmoid,
     "Flatten": _convert_Flatten,
+    "PRelu": _convert_Prelu,
 }
