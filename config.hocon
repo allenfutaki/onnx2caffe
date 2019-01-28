@@ -1,0 +1,5 @@
+experiment_id = "test"
+save_path = ""          # path to save converting models
+onnx = ""               # path to onnx model
+caffemodel = ""         # filename of .caffemodel
+prototxt = ""           # filename of .prototxt
