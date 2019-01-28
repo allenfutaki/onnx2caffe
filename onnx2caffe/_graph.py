@@ -168,7 +168,7 @@ class Graph(object):
         return n_
 
     @staticmethod
-    def from_onnx(graph, pth_path):  # type: (GraphProto) -> Graph
+    def from_onnx(graph, pth_path=None):  # type: (GraphProto) -> Graph
         
         input_tensors = OrderedDict()
         for t in graph.initializer:
