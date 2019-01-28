@@ -1,4 +1,5 @@
 from __future__ import print_function
+from util.option import Option 
 import sys, os
 sys.path.append('/home/allen/Documents/caffe/python')
 import caffe
@@ -164,22 +165,16 @@ def cleanGraph(graph):
     return graph
 
 if __name__ == "__main__":
-    onnx_path = './onnx_model/fmobilenet_faceid_AGE2_local.onnx'
-    pth_path = './pytorch_model/faceid_AGE2.pth'
-    prototxt_path = './caffe_model/fmobilenet_faceid_AGE2_local.prototxt'
-    caffemodel_path = './caffe_model/fmobilenet_faceid_AGE2_local.caffemodel'
-    #  output  =  '/mnt/new/s1/Allen/workshop/onnx_model'
-    #  flexibility  =  ['0.25', '0.5', '0.75']
-    #  resolution  =  [224, 192, 160, 128]
+    parser = argparse.ArgumentParser(description="Convert Pytorch to Caffe")
+    parser.add_argument('--conf-path', type=str, metavar='conf_path',
+                        help='configuration path')
+    args = parser.parse_args()
 
-    #  for f in flexibility:
-        #  for r in resolution:
-            #  onnx_path = os.path.join(output, 'fake_mobilenet_nofc_{}_{}x{}.onnx'.format(f,r,r))
-    graph = getGraph(onnx_path, pth_path)
+    config = Option(args.conf_path)
+
+    graph = getGraph(config.onnxmodel)
     cleanGraph(graph)
-            #  prototxt_path = '/mnt/new/s1/Allen/workshop/onnx2caffe/caffemodel/fake_mobilenet_nofc_{}_{}x{}.prototxt'.format(f,r,r)
-            #  caffemodel_path = '/mnt/new/s1/Allen/workshop/onnx2caffe/caffemodel/fake_mobilenet_nofc_{}_{}x{}.caffemodel'.format(f,r,r)
-    convertToCaffe(graph, prototxt_path, caffemodel_path)
+    convertToCaffe(graph, config.prototxt, config.caffemodel)
 
 
 
