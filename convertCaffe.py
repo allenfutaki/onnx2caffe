@@ -1,11 +1,12 @@
 from __future__ import print_function
-import torch
-import torch.nn
-import sys
-import onnx
-import numpy as np
+import sys, os
+sys.path.append('/home/allen/Documents/caffe/python')
 import caffe
 from caffe.proto import caffe_pb2
+import torch
+import torch.nn
+import onnx
+import numpy as np
 caffe.set_mode_cpu()
 from onnx2caffe._transformers import ConvAddFuser,ConstantsToInitializers
 from onnx2caffe._graph import Graph
@@ -20,7 +21,7 @@ import importlib
 transformers = [
     ConstantsToInitializers(),
     ConvAddFuser(),
-]
+] 
 
 def convertToCaffe(graph, prototxt_save_path, caffe_model_save_path):
 
@@ -51,9 +52,11 @@ def convertToCaffe(graph, prototxt_save_path, caffe_model_save_path):
             continue
 
         if op_type not in cvt._ONNX_NODE_REGISTRY:
+            # converter_fn = cvt._ONNX_NODE_REGISTRY['Unknown']
+            print("passing unknown layer: {}".format(op_type))
             err.unsupported_op(node)
-            continue
-        converter_fn = cvt._ONNX_NODE_REGISTRY[op_type]
+        else:
+            converter_fn = cvt._ONNX_NODE_REGISTRY[op_type]
         layer = converter_fn(node,graph,err)
         if type(layer)==tuple:
             for l in layer:
@@ -92,20 +95,107 @@ def convertToCaffe(graph, prototxt_save_path, caffe_model_save_path):
     net.save(caffe_model_save_path)
     return net
 
-def getGraph(onnx_path):
+def getGraph(onnx_path, pth_path):
     model = onnx.load(onnx_path)
     model = shape_inference.infer_shapes(model)
     model_graph = model.graph
-    graph = Graph.from_onnx(model_graph)
+    graph = Graph.from_onnx(model_graph, pth_path)
     graph = graph.transformed(transformers)
     graph.channel_dims = {}
 
     return graph
 
+def cleanGraph(graph):
+    clean_nodes = {}
+    for id, node in enumerate(graph.nodes):
+        op_type = node.op_type
+        
+        if op_type not in cvt._ONNX_NODE_REGISTRY:
+            if len(node.parents) == 1 or len(node.children) == 1:
+                clean_nodes[node.name] = node
+                if len(node.input_tensors) == 0 : # no weight in this node
+                    if len(node.parents) == 1:
+                        if len(node.parents[0].inputs) > 0:
+                            piece_head = node.parents[0] 
+                        else:
+                            i = 1
+                            while(graph.nodes[id-i].name in clean_nodes):
+                                i += 1
+                            piece_head = graph.nodes[id-i]
+
+                        if node in piece_head.children:
+                            piece_head.children.remove(node)
+            
+                        for child in node.children:   
+                            child.parents.remove(node)
+                            index = child.inputs.index(node.name)
+                            child.inputs.remove(node.name)
+                            
+                            if piece_head.name in child.inputs:
+                                continue
+                            piece_head.children.append(child)
+                            child.parents.append(piece_head)
+                            child.inputs.insert(index, piece_head.name)
+                    else:
+                        if len(node.inputs) == 0:
+                            i = 1
+                            while(graph.nodes[id-i].name in clean_nodes):
+                                i += 1
+                            node.parents.append(graph.nodes[id-i])
+                            node.inputs.append(graph.nodes[id-i])
+
+                        piece_tail = node.children[0]
+                        piece_tail.parents.remove(node)
+                        piece_tail.inputs.remove(node.name)
+                        for parent in node.parents:
+                            if len(parent.inputs) == 0:
+                                continue
+                            parent.children.remove(node)
+
+                            piece_tail.parents.append(parent)
+                            parent.children.append(piece_tail)
+                            piece_tail.inputs.insert(0,parent.name)
+            else:
+                print("multiple inputs and multiple outputs are confused ...")
+                sys.exit(1)
+
+    for key in clean_nodes.keys():
+        graph.nodes.remove(clean_nodes[key])
+    return graph
+
 if __name__ == "__main__":
-    onnx_path = sys.argv[1]
-    prototxt_path = sys.argv[2]
-    caffemodel_path = sys.argv[3]
-    graph = getGraph(onnx_path)
+    onnx_path = './onnx_model/fmobilenet_faceid_AGE2_local.onnx'
+    pth_path = './pytorch_model/faceid_AGE2.pth'
+    prototxt_path = './caffe_model/fmobilenet_faceid_AGE2_local.prototxt'
+    caffemodel_path = './caffe_model/fmobilenet_faceid_AGE2_local.caffemodel'
+    #  output  =  '/mnt/new/s1/Allen/workshop/onnx_model'
+    #  flexibility  =  ['0.25', '0.5', '0.75']
+    #  resolution  =  [224, 192, 160, 128]
+
+    #  for f in flexibility:
+        #  for r in resolution:
+            #  onnx_path = os.path.join(output, 'fake_mobilenet_nofc_{}_{}x{}.onnx'.format(f,r,r))
+    graph = getGraph(onnx_path, pth_path)
+    cleanGraph(graph)
+            #  prototxt_path = '/mnt/new/s1/Allen/workshop/onnx2caffe/caffemodel/fake_mobilenet_nofc_{}_{}x{}.prototxt'.format(f,r,r)
+            #  caffemodel_path = '/mnt/new/s1/Allen/workshop/onnx2caffe/caffemodel/fake_mobilenet_nofc_{}_{}x{}.caffemodel'.format(f,r,r)
     convertToCaffe(graph, prototxt_path, caffemodel_path)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
