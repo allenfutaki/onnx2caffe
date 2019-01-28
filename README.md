@@ -8,7 +8,7 @@ only use for inference
 * pytorch 1.0.0 
 * onnx 1.4.1
 * protobuf 3.6.1
-* pyhocon 0.3.50(for config)
+* pyhocon 0.3.50 (for config)
 
 ### How to use
 To convert onnx model to caffe:
@@ -30,6 +30,7 @@ python convertCaffe.py --conf-path ${CONFIG}.hocon
 * Reshape
 * Upsample
 * Flatten
+* PRelu
 
 ### TODO List
  - [x] Remove *Constant*, *Shape*, *Unsqueeze*, *Squeeze* ops in onnx and concatenate prototxt after removing these ops
