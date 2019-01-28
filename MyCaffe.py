@@ -43,7 +43,7 @@ def assign_proto(proto, name, val):
     else:
         setattr(proto, name, val)
 
-class Function(object):
+class Function(object): 
     """A Function specifies a layer, its parameters, and its inputs (which
     are Tops from other layers)."""
 
