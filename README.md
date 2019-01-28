@@ -34,6 +34,7 @@ python convertCaffe.py --conf-path ${CONFIG}.hocon
 
 ### TODO List
  - [x] Remove *Constant*, *Shape*, *Unsqueeze*, *Squeeze* ops in onnx and concatenate prototxt after removing these ops
+ - [x] Transfer attribute *value* of *Constant* to Reshape
  - [ ] *Concat* layer
      - the common usage of pytorch *view* operation, the *Concat* before the *Reshape* is redundant for caffe
  - [ ] merge batchnormization to convolution
