@@ -4,7 +4,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from caffe import params as P
 import math
-import numpy as np
+import numpy as np 
 from ._graph import Node, Graph
 from MyCaffe import Function as myf
 
@@ -15,7 +15,7 @@ def _compare(a, b, encoding="utf8"): #type: (Text, Text, Text) -> bool
         b = b.decode(encoding)
     return a == b
 
-def make_input(input):
+def make_input(input): 
     name = input[0]
     output = input[0]
     output = [output]
@@ -68,7 +68,7 @@ def _convert_conv(node, graph, err):
     pads = node.attrs.get("pads", [0, 0, 0, 0])
     strides = node.attrs["strides"]
 
-    layer = myf("Convolution", node_name, [input_name], [output_name],
+    layer = myf("Convolution", node_name+ '_conv' , [input_name], [output_name],
                 kernel_h = kernel_shape[0],kernel_w = kernel_shape[1],
                 stride_h=strides[0], stride_w = strides[1], group = groups,
                 pad_h = pads[0], pad_w = pads[1],
@@ -80,14 +80,14 @@ def _convert_conv(node, graph, err):
 def _convert_relu(node,graph,err):
     input_name = str(node.inputs[0])
     output_name = str(node.outputs[0])
-    name = str(node.name)
+    node_name = node.name
 
     if input_name==output_name:
         inplace = True
     else:
         inplace = False
 
-    layer = myf("ReLU",name,[input_name],[output_name],in_place=inplace)
+    layer = myf("ReLU",node_name+"_relu",[input_name],[output_name],in_place=inplace)
     # l_top_relu1 = L.ReLU(l_bottom, name=name, in_place=True)
 
     graph.channel_dims[output_name] = graph.channel_dims[input_name]
@@ -128,7 +128,7 @@ def _convert_BatchNorm(node,graph,err):
         inplace = False
 
     bn_layer = myf("BatchNorm", node_name+"_bn",[input_name],[output_name],eps = epsilon, use_global_stats = True, in_place=inplace)
-    scale_layer = myf("Scale", node_name, [output_name],[output_name],in_place=True,bias_term=True)
+    scale_layer = myf("Scale", node_name+"_scale", [output_name],[output_name],in_place=True,bias_term=True)
 
     graph.channel_dims[output_name] = graph.channel_dims[input_name]
 
@@ -139,10 +139,10 @@ def _convert_Add(node,graph,err):
     output_name = str(node.outputs[0])
     node_name = node.name
 
-    max_dim = 0
-    for name in input_name_list:
-        if graph.channel_dims[name]>max_dim:
-            max_dim = graph.channel_dims[name]
+    # max_dim = 0
+    # for name in input_name_list:
+    #     if graph.channel_dims[name]>max_dim:
+    #         max_dim = graph.channel_dims[name]
 
     if 'broadcast' in node.attrs:
         if node.attrs['broadcast'] == 1:
@@ -182,17 +182,28 @@ def _convert_Mul(node,graph,err):
             return flat_layer,layer
 
     layer = myf("Eltwise",node_name,input_name_list,[output_name],operation=P.Eltwise.PROD)
-    graph.channel_dims[output_name] = graph.channel_dims[input_name_list[0]]
+    try:
+        graph.channel_dims[output_name] = graph.channel_dims[input_name_list[0]]
+    except:
+        "last layer has no inputs."
     return layer
 
 def _convert_Reshape(node,graph,err):
     node_name = node.name
     input_name = str(node.inputs[0])
     output_name = str(node.outputs[0])
-    if len(node.inputs)==1:
-        shape = tuple(node.attrs.get('shape', ()))
-    else:
-        shape = tuple(node.input_tensors[node.inputs[1]])
+    # if len(node.inputs)==1:
+    #     shape = tuple(node.attrs.get('shape', ()))
+    # else:
+    #     print()
+        # shape = tuple(node.input_tensors[node.inputs[1]])
+    # for _node in graph.nodes:
+    #     if output_name in _node.inputs:
+    #         shape =   
+    size_name = []
+    for key in node.input_tensors.keys():
+        size_name.append(key)
+    shape = node.input_tensors
     # if shape == ():
 
 
@@ -202,7 +213,11 @@ def _convert_Reshape(node,graph,err):
         inplace = False
     if len(shape) == 2:
         layer = myf("Flatten",node_name,[input_name],[output_name],in_place=inplace)
-        graph.channel_dims[output_name] = shape[1]
+        print(shape[size_name[1]])
+        if shape[size_name[1]] < 0:
+            graph.channel_dims[output_name] = graph.shape_dict[input_name][1]
+        else:
+            graph.channel_dims[output_name] = shape[size_name[1]]
         return layer
     elif len(shape) == 4:
         graph.channel_dims[output_name] = shape[1]
@@ -230,8 +245,10 @@ def _convert_pool(node,graph,err):
     output_name = str(node.outputs[0])
     if node.op_type.endswith("MaxPool"):
         pool_type = P.Pooling.MAX
+        pool_name = '_max'
     elif node.op_type.endswith("AveragePool"):
         pool_type = P.Pooling.AVE
+        pool_name = '_ave'
     else:
         return err.unsupported_op_configuration(node,  "Unsupported pool type")
 
@@ -239,7 +256,7 @@ def _convert_pool(node,graph,err):
     strides = node.attrs.get('strides', [1, 1])
     pads = node.attrs.get('pads', [0, 0, 0, 0])
 
-    layer = myf("Pooling",node_name,[input_name],[output_name],pooling_param = dict(pool = pool_type,
+    layer = myf("Pooling",node_name + pool_name,[input_name],[output_name],pooling_param = dict(pool = pool_type,
                                                                                     kernel_h = kernel_shape[0],
                                                                                     kernel_w = kernel_shape[1],
                                                                                     stride_h = strides[0],
@@ -270,8 +287,8 @@ def _convert_gemm(node,graph,err):
                                 "Weight tensor: {} not found in the graph initializer".format(weight_name, ))
         return
 
-    if node.attrs["broadcast"] != 1 or node.attrs["transB"] != 1:
-        return err.unsupported_op_configuration(node,"Gemm is supported only for inner_product layer")
+    # if node.attrs["broadcast"] != 1 or node.attrs["transB"] != 1:
+    #     return err.unsupported_op_configuration(node,"Gemm is supported only for inner_product layer")
 
     b = None
     bias_flag = False
@@ -286,7 +303,7 @@ def _convert_gemm(node,graph,err):
             return err.unsupported_op_configuration(node,
                                                     "Gemm is supported only for inner_product layer")
 
-    layer = myf("InnerProduct",node_name,[input_name],[output_name],num_output = W.shape[0],bias_term = bias_flag)
+    layer = myf("InnerProduct",node_name + '_fc',[input_name],[output_name],num_output = W.shape[0],bias_term = bias_flag)
     graph.channel_dims[output_name] = W.shape[0]
 
     return layer
@@ -397,7 +414,17 @@ def _convert_conv_transpose(node,graph,err):
     #         group=groups,
     #         bias_term=bias_term))
 
-
+def _convert_Unknown(node,graph,err):
+    node_name = 'Unknown' + node.name
+    input_name_list = [str(i) for i in node.inputs]
+    output_name = str(node.outputs[0])
+    try:
+        graph.channel_dims[output_name] = graph.channel_dims[input_name_list[0]]
+    except:
+        "last layer has no inputs."
+    layer = myf("Scale", node_name, [input_name_list[0]],[output_name],in_place=False,bias_term=False)
+    
+    return layer
 
 _ONNX_NODE_REGISTRY = {
     "Conv": _convert_conv,
@@ -411,9 +438,10 @@ _ONNX_NODE_REGISTRY = {
     "Dropout": _convert_dropout,
     "Gemm": _convert_gemm,
     "Upsample": _convert_upsample,
-    "Concat": _convert_concat,
+    # "Concat": _convert_concat,
     "ConvTranspose": _convert_conv_transpose,
     "Sigmoid": _convert_sigmoid,
     "Flatten": _convert_Flatten,
     "PRelu": _convert_Prelu,
+    "Unknown": _convert_Unknown
 }

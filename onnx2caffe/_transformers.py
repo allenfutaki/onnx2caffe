@@ -480,12 +480,25 @@ class ConstantsToInitializers(object):
     def __call__(self, graph):  # type: (Graph) -> Graph
         output_names = [str(output_[0]) for output_ in graph.outputs]
         remaining_nodes = []
-        for node in graph.nodes:
+        for id, node in enumerate(graph.nodes):
             if node.op_type != 'Constant' or node.name in output_names:
                 remaining_nodes.append(node)
                 continue
-            for child in node.children:
-                child.input_tensors[node.outputs[0]] = node.attrs["value"]
+
+            temp_child = node.children[0]
+            found_reshape = False
+            found_shape = False
+            if graph.nodes[id+1].op_type == 'Shape': #the Shape Op is closely next to Constant Op
+                    found_shape = True
+
+            while(not found_reshape):                
+                if temp_child.op_type == 'Reshape':
+                    found_reshape = True
+                    reshape_node = temp_child
+                temp_child = temp_child.children[0]
+            
+            reshape_node.input_tensors[node.outputs[0]+'_Shape' if found_shape else node.outputs[0]] = node.attrs["value"]
+            
 
         graph.nodes = remaining_nodes
         return graph

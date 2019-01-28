@@ -7,6 +7,9 @@ from onnx import numpy_helper, ValueInfoProto, AttributeProto, GraphProto, NodeP
 from typing import Any, Text, Iterable, List, Dict, Sequence, Optional, Tuple, Union
 from typing_extensions import Protocol
 import numpy as np
+import torch
+from collections import OrderedDict
+import sys
 
 
 class Transformer(Protocol):
@@ -71,7 +74,7 @@ class Node(object):
         self.attrs = attrs
         self.inputs = inputs
         self.outputs = outputs
-        self.input_tensors = {}  # type: Dict[Text, np._ArrayLike[Any]]
+        self.input_tensors = OrderedDict()  # type: Dict[Text, np._ArrayLike[Any]]
         self.parents = []  # type: List[Node]
         self.children = []  # type: List[Node]
         self.metadata = {}  # type: Dict[Any, Any]
@@ -165,14 +168,45 @@ class Graph(object):
         return n_
 
     @staticmethod
-    def from_onnx(graph):  # type: (GraphProto) -> Graph
-        input_tensors = {
-            t.name: numpy_helper.to_array(t) for t in graph.initializer
-        }
+    def from_onnx(graph, pth_path):  # type: (GraphProto) -> Graph
+        
+        input_tensors = OrderedDict()
+        for t in graph.initializer:
+            input_tensors[t.name] = numpy_helper.to_array(t) 
+
+        # use pytorch model to check onnx model weights
+        #  problem = []
+        #  state = torch.load(pth_path)
+        #  for key1, key2 in zip(state.keys(), input_tensors.keys()):
+            #  print('{:60}, {:4}:{}'.format(key1, key2, input_tensors[key2].shape))
+            #  onnx_weight = torch.tensor(input_tensors[key2])
+            #  c = torch.abs(state[key1] - onnx_weight)
+            #  if len(c.gt(0.0001).nonzero()) > 0:
+                #  print(c.numel())
+                #  print(torch.sum(c.gt(0.0001)))
+                #  print(torch.sum(c.gt(0.001)))
+                #  print(torch.sum(c.gt(0.01)))
+                #  print(torch.sum(c.gt(0.1)))
+                #  problem.append(key1)
+                #  input_tensors[key2] = state[key1].cpu().numpy()
+
+        #  print('\n-----------------------------------------------')
+        #  print('following pytorch weights are inconsistent with onnx weights for 0.0001 gap')
+        #  for i in problem:
+            #  print(i)
+        #  action = input("continue(c) / quit(q):").lower().strip()
+        #  if action == 'c':
+            #  pass
+        #  elif action == 'q':
+            #  sys.exit(1)            
+
         nodes_ = []
-        nodes_by_input = {}  # type: Dict[Text, List[Node]]
-        nodes_by_output = {}
+        nodes_by_input = OrderedDict()  # type: Dict[Text, List[Node]]
+        nodes_by_output = OrderedDict()
         for node in graph.node:
+            if node.op_type == 'Reshape':
+                node_ = Node.from_onnx(node)
+
             node_ = Node.from_onnx(node)
             for input_ in node_.inputs:
                 if input_ in input_tensors:
@@ -188,7 +222,7 @@ class Graph(object):
                 nodes_by_output[output_] = node_
             nodes_.append(node_)
 
-        inputs = []
+        inputs = [] 
         for i in graph.input:
             if i.name not in input_tensors:
                 inputs.append(_input_from_onnx_input(i))
@@ -206,16 +240,18 @@ class Graph(object):
                     node_.children.extend(nodes_by_input[output_])
 
         # Dictionary to hold the "value_info" field from ONNX graph
-        shape_dict = {} # type: Dict[Text,Tuple[int,...]]
+        shape_dict = OrderedDict() # type: Dict[Text,Tuple[int,...]]
 
         def extract_value_info(shape_dict, # type: Dict[Text,Tuple[int,...]]
                                value_info, # type: ValueInfoProto[...]
                                ):
             # type: (...) -> None
+            # print(value_info.name)
             shape_dict[value_info.name] = tuple([int(dim.dim_value) for dim in value_info.type.tensor_type.shape.dim])
 
         for value_info in graph.value_info:
             extract_value_info(shape_dict, value_info)
+        # print('---------------------')
         for value_info in graph.input:
             extract_value_info(shape_dict, value_info)
         for value_info in graph.output:

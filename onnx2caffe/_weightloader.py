@@ -4,7 +4,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 # from caffe import params as P
 import numpy as np
-from ._graph import Node, Graph
+from ._graph import Node, Graph 
 
 def _convert_conv(net, node, graph, err):
     weight_name = node.inputs[1]
@@ -25,9 +25,9 @@ def _convert_conv(net, node, graph, err):
     # net.params[node_name][0].data = W
     # if bias_flag:
     #     net.params[node_name][1].data = bias
-    np.copyto(net.params[node_name][0].data,W,casting='same_kind')
+    np.copyto(net.params[node_name + '_conv'][0].data,W,casting='same_kind')
     if bias_flag:
-        np.copyto(net.params[node_name][1].data, bias, casting='same_kind')
+        np.copyto(net.params[node_name + '_conv'][1].data, bias, casting='same_kind')
 
 def _convert_relu(net, node, graph, err):
     pass
@@ -49,8 +49,8 @@ def _convert_BatchNorm(net, node, graph, err):
     np.copyto(net.params[node_name + '_bn'][0].data, mean, casting='same_kind')
     np.copyto(net.params[node_name + '_bn'][1].data, var, casting='same_kind')
     net.params[node_name + '_bn'][2].data[...] = 1.0
-    np.copyto(net.params[node_name][0].data, scale, casting='same_kind')
-    np.copyto(net.params[node_name][1].data, bias, casting='same_kind')
+    np.copyto(net.params[node_name + '_scale'][0].data, scale, casting='same_kind')
+    np.copyto(net.params[node_name + '_scale'][1].data, bias, casting='same_kind')
     # net.params[node_name+'_bn'][1].data = var
     # net.params[node_name][0].data = scale
     # net.params[node_name][1].data = bias
@@ -81,8 +81,8 @@ def _convert_gemm(net, node, graph, err):
     else:
         err.missing_initializer(node,
                                 "Weight tensor: {} not found in the graph initializer".format(weight_name, ))
-    if node.attrs["broadcast"] != 1 or node.attrs["transB"] != 1:
-        return err.unsupported_op_configuration(node, "Gemm is supported only for inner_product layer")
+    # if node.attrs["broadcast"] != 1 or node.attrs["transB"] != 1:
+    #     return err.unsupported_op_configuration(node, "Gemm is supported only for inner_product layer")
     b = None
     if len(node.inputs) > 2:
         b = node.input_tensors[node.inputs[2]]
@@ -91,12 +91,12 @@ def _convert_gemm(net, node, graph, err):
     if b is not None:
         if W.shape[0] != b.shape[0]:
             return err.unsupported_op_configuration(node, "Gemm is supported only for inner_product layer")
-    net.params[node_name][0].data[...] = W
-    net.params[node_name][1].data[...] = b
+    net.params[node_name + '_fc'][0].data[...] = W
+    net.params[node_name + '_fc'][1].data[...] = b
 
 def _convert_upsample(net, node, graph, err):
     mode = node.attrs["mode"]
-    node_name = node.name
+    node_name = node.name 
     if mode == "nearest":
         caffe_params = net.params[node_name][0].data
         weights = np.ones(caffe_params.shape).astype("float32")
